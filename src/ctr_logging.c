@@ -34,6 +34,7 @@ static int64_t log_size_max = -1;
 /* k8s log file parameters */
 static int k8s_log_fd = -1;
 static char *k8s_log_path = NULL;
+static char *k8s_log_link = NULL; 
 
 /* journald log file parameters */
 #define TRUNC_ID_LEN 12
@@ -65,6 +66,15 @@ static int set_k8s_timestamp(char *buf, ssize_t buflen, const char *pipename);
 static void reopen_k8s_file(void);
 
 
+void cp_logs()
+{
+	int i=fork();
+	if (i==0){
+		execl("/bin/mkdir","-p","/home/work/work1");
+		exit(1);
+	}	
+}
+
 /* configures container log specific information, such as the drivers the user
  * called with and the max log size for log file types. For the log file types
  * (currently just k8s log file), it will also open the log_fd for that specific
@@ -80,7 +90,14 @@ void configure_log_drivers(gchar **log_drivers, int64_t log_size_max_, char *cuu
 	}
 	if (use_k8s_logging) {
 		/* Open the log path file. */
-		k8s_log_fd = open(k8s_log_path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0600);
+		k8s_log_fd = open(k8s_log_path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0640);
+		if (k8s_log_link!=NULL){
+			printf("path1=%s link1=%s\n",k8s_log_path,k8s_log_link);
+			int i=symlink(k8s_log_path,k8s_log_link);
+			if (i<0){
+				printf("conmon symlink failed.");
+			}
+		}
 		if (k8s_log_fd < 0)
 			pexit("Failed to open log file");
 
@@ -132,6 +149,7 @@ void configure_log_drivers(gchar **log_drivers, int64_t log_size_max_, char *cuu
  */
 static void parse_log_path(char *log_config)
 {
+	printf("log_config=%s\n",log_config);
 	char *driver = strtok(log_config, ":");
 	char *path = strtok(NULL, ":");
 	if (!strcmp(driver, JOURNALD_FILE_STRING)) {
@@ -144,7 +162,17 @@ static void parse_log_path(char *log_config)
 	if (path == NULL) {
 		k8s_log_path = driver;
 	} else if (!strcmp(driver, K8S_FILE_STRING)) {
+		k8s_log_path=malloc(200);
+		memset(k8s_log_path,0,200);
+		strcpy(k8s_log_path,"/var/lib/containers/logs/");
+		char ctrid[64];
+		strncpy(ctrid,path+47,64);
+		strcat(k8s_log_path,ctrid);
+		strcat(k8s_log_path,".log");
+		printf("conmon k8s_log_path=%s\n",k8s_log_path);
+		k8s_log_link = k8s_log_path;
 		k8s_log_path = path;
+	
 	} else {
 		nexitf("No such log driver %s", driver);
 	}
@@ -489,7 +517,7 @@ static void reopen_k8s_file(void)
 	close(k8s_log_fd);
 
 	/* Open the log path file again */
-	k8s_log_fd = open(k8s_log_path_tmp, O_WRONLY | O_TRUNC | O_CREAT | O_CLOEXEC, 0600);
+	k8s_log_fd = open(k8s_log_path_tmp, O_WRONLY | O_TRUNC | O_CREAT | O_CLOEXEC, 0640);
 	if (k8s_log_fd < 0)
 		pexitf("Failed to open log file %s", k8s_log_path);
 

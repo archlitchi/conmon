@@ -303,6 +303,7 @@ static GMainLoop *main_loop = NULL;
 
 static void conn_sock_shutdown(struct conn_sock_s *sock, int how)
 {
+	printf("conmon:conn_sock_shutdown");
 	if (sock->fd == -1)
 		return;
 	shutdown(sock->fd, how);
@@ -390,6 +391,7 @@ static void on_sigchld(G_GNUC_UNUSED int signal)
 
 static void on_sig_exit(int signal)
 {
+	printf("conmon:on_sig_exit\n");
 	if (container_pid > 0) {
 		if (kill(container_pid, signal) == 0)
 			return;
@@ -918,6 +920,7 @@ static void runtime_exit_cb(G_GNUC_UNUSED GPid pid, int status, G_GNUC_UNUSED gp
 
 static void container_exit_cb(G_GNUC_UNUSED GPid pid, int status, G_GNUC_UNUSED gpointer user_data)
 {
+	printf("conmon: container_exit_cb\n");
 	if (get_exit_status(status) != 0) {
 		ninfof("container %d exited with status %d", pid, get_exit_status(status));
 	}
@@ -1177,6 +1180,12 @@ static void setup_oom_handling(int pid)
 	setup_oom_handling_cgroup_v1(pid);
 }
 
+static void test_exit()
+{
+	cp_logs();
+	printf("conmon:test_exit\n");
+}
+
 static void do_exit_command()
 {
 	pid_t exit_pid;
@@ -1188,6 +1197,7 @@ static void do_exit_command()
 		sync_pipe_fd = -1;
 	}
 
+	printf("conmon:do_exit_command\n");
 	if (signal(SIGCHLD, SIG_DFL) == SIG_ERR) {
 		_pexit("Failed to reset signal for SIGCHLD");
 	}
@@ -1628,6 +1638,8 @@ int main(int argc, char *argv[])
 
 	if (opt_exit_command)
 		atexit(do_exit_command);
+	atexit(test_exit);
+//	pexit("Failed to test_exit");
 
 	g_ptr_array_free(runtime_argv, TRUE);
 
